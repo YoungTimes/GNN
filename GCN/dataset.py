@@ -44,7 +44,7 @@ class CoraData():
         adjacency = self.normalize_adj(adjacency)
 
 
-        train_index = np.arange(140)
+        train_index = np.arange(150)
         val_index = np.arange(150, 500)
         test_index = np.arange(500, 2708)
 
