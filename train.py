@@ -1,107 +1,86 @@
 from graph import GraphConvolutionLayer, GraphConvolutionModel
-from utils import *
+from dataset import CoraData
 
 import time
-
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
-# Define parameters
-DATASET = 'cora'
-FILTER = 'localpool'  # 'chebyshev'
-MAX_DEGREE = 2  # maximum polynomial degree
-SYM_NORM = True  # symmetric (True) vs. left-only (False) normalization
-NB_EPOCH = 2
-PATIENCE = 10  # early stopping patience
+dataset = CoraData()
+features, labels, adj, train_mask, val_mask, test_mask = dataset.data()
 
-# Get data
-X, A, y = load_data(dataset=DATASET)
-y_train, y_val, y_test, idx_train, idx_val, idx_test, train_mask = get_splits(y)
+graph = [features, adj]
 
-# Normalize X
-X /= X.sum(1).reshape(-1, 1)
-
-if FILTER == 'localpool':
-    """ Local pooling filters (see 'renormalization trick' in Kipf & Welling, arXiv 2016) """
-    print('Using local pooling filters...')
-    A_ = preprocess_adj(A, SYM_NORM)
-    support = 1
-    graph = [X, A_]
-
-    # X: (2708, 1433), A_:(2708, 2708)
-
-elif FILTER == 'chebyshev':
-    """ Chebyshev polynomial basis filters (Defferard et al., NIPS 2016)  """
-    print('Using Chebyshev polynomial basis filters...')
-    L = normalized_laplacian(A, SYM_NORM)
-    L_scaled = rescale_laplacian(L)
-    T_k = chebyshev_polynomial(L_scaled, MAX_DEGREE)
-    support = MAX_DEGREE + 1
-    graph = [X]+T_k
-
-else:
-    raise Exception('Invalid filter type.')
-
-# X_in = Input(shape=(X.shape[1],))
-
-# Define model architecture
-# NOTE: We pass arguments for graph convolutional layers as a list of tensors.
-# This is somewhat hacky, more elegant options would require rewriting the Layer base class.
-# H = Dropout(0.5)(X_in)
-# H = GraphConvolution(16, support, activation='relu', kernel_regularizer=l2(5e-4))([H]+G)
-# H = Dropout(0.5)(H)
-# Y = GraphConvolution(y.shape[1], support, activation='softmax')([H]+G)
-
-# Compile model
 model = GraphConvolutionModel()
-# model.compile(loss='categorical_crossentropy',
-#         optimizer=tf.keras.optimizers.Adam(lr=0.01),
-#         metrics=['accuracy'])
-def accuracy(preds, labels):
-    return np.mean(np.equal(np.argmax(labels, 1), np.argmax(preds, 1)))
 
-model.compile(optimizer='adam',
-              loss=tf.keras.losses.CategoricalCrossentropy(from_logits=False),
-              metrics=['accuracy'])
+loss_object = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
 
-# Helper variables for main training loop
-wait = 0
-best_val_loss = 99999
+def loss(model, x, y, train_mask, training):
 
-# Fit
-# for epoch in range(1, NB_EPOCH + 1):
+    y_ = model(x, training=training)
 
-    # Log wall-clock time
-    # t = time.time()
+    test_mask_logits = tf.gather_nd(y_, tf.where(train_mask))
+    masked_labels = tf.gather_nd(y, tf.where(train_mask))
 
-    # Single training iteration (we mask nodes without labels for loss calculation)
-model.fit(graph, y_train, sample_weight=train_mask,
-            batch_size=X.shape[0], epochs=200, shuffle=False, verbose=2)
+    return loss_object(y_true=masked_labels, y_pred=test_mask_logits)
 
-    # # Predict on full dataset
-    # preds = model.predict(graph, batch_size=A.shape[0])
 
-    # # Train / validation scores
-    # train_val_loss, train_val_acc = evaluate_preds(preds, [y_train, y_val],
-    #                                                [idx_train, idx_val])
-    # print("Epoch: {:04d}".format(epoch),
-    #       "train_loss= {:.4f}".format(train_val_loss[0]),
-    #       "train_acc= {:.4f}".format(train_val_acc[0]),
-    #       "val_loss= {:.4f}".format(train_val_loss[1]),
-    #       "val_acc= {:.4f}".format(train_val_acc[1]),
-    #       "time= {:.4f}".format(time.time() - t))
+def grad(model, inputs, targets, train_mask):
+    with tf.GradientTape() as tape:
+        loss_value = loss(model, inputs, targets, train_mask, training=True)
+    
+    return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
-    # # Early stopping
-    # if train_val_loss[1] < best_val_loss:
-    #     best_val_loss = train_val_loss[1]
-    #     wait = 0
-    # else:
-    #     if wait >= PATIENCE:
-    #         print('Epoch {}: early stopping'.format(epoch))
-    #         break
-    #     wait += 1
+def test(mask):
+    logits = model(graph)
 
-# Testing
-# test_loss, test_acc = evaluate_preds(preds, [y_test], [idx_test])
-# print("Test set results:",
-#       "loss= {:.4f}".format(test_loss[0]),
-#       "accuracy= {:.4f}".format(test_acc[0]))
+    test_mask_logits = tf.gather_nd(logits, tf.where(mask))
+    masked_labels = tf.gather_nd(labels, tf.where(mask))
+
+    ll = tf.math.equal(tf.math.argmax(masked_labels, -1), tf.math.argmax(test_mask_logits, -1))
+    accuarcy = tf.reduce_mean(tf.cast(ll, dtype=tf.float32))
+
+    return accuarcy
+
+optimizer=tf.keras.optimizers.Adam(learning_rate=0.01, decay=5e-5)
+
+# 记录过程值，以便最后可视化
+train_loss_results = []
+train_accuracy_results = []
+train_val_results = []
+train_test_results = []
+
+num_epochs = 200
+
+for epoch in range(num_epochs):
+
+    loss_value, grads = grad(model, graph, labels, train_mask)
+    optimizer.apply_gradients(zip(grads, model.trainable_variables))
+
+    accuarcy = test(train_mask)
+    val_acc = test(val_mask)
+    test_acc = test(test_mask)
+
+    train_loss_results.append(loss_value)
+    train_accuracy_results.append(accuarcy)
+    train_val_results.append(val_acc)
+    train_test_results.append(test_acc)
+
+    print("Epoch {} loss={} accuracy={} val_acc={} test_acc={}".format(epoch, loss_value, accuarcy, val_acc, test_acc))
+
+# 训练过程可视化
+fig, axes = plt.subplots(4, sharex=True, figsize=(12, 8))
+fig.suptitle('Training Metrics')
+
+axes[0].set_ylabel("Loss", fontsize=14)
+axes[0].plot(train_loss_results)
+
+axes[1].set_ylabel("Accuracy", fontsize=14)
+axes[1].plot(train_accuracy_results)
+
+axes[2].set_ylabel("Val Acc", fontsize=14)
+axes[2].plot(train_val_results)
+
+axes[3].set_ylabel("Test Acc", fontsize=14)
+axes[3].plot(train_test_results)
+
+plt.show()

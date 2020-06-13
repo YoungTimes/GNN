@@ -21,27 +21,7 @@ class GraphConvolutionLayer(tf.keras.layers.Layer):
         self.bias_regularizer = bias_regularizer
         self.activation = activation
 
-        # self.kernel = self.add_weight(shape = (self.input_dim, self.output_dim),
-        #                               initializer = self.kernel_initializer,
-        #                               name = 'kernel',
-        #                               regularizer = self.kernel_regularizer)
-        # if self.use_bias:
-        #     self.bias = self.add_weight(shape=(self.output_dim, ),
-        #                                 initializer=self.bias_initializer,
-        #                                 name='bias',
-        #                                 regularizer = self.bias_regularizer)
-        # else:
-        #     self.bias = None
-        
-
     def build(self, nodes_shape):
-        # print("xxxxxxxxxxxxxxxxx")
-        # print(nodes_shape)
-        # features_shape = input_shapes[0]
-
-        # input_dim = features_shape[1]
-        # input_dim = nodes_shape[1]
-
         self.kernel = self.add_weight(shape = (self.input_dim, self.output_dim),
                                       initializer = self.kernel_initializer,
                                       name = 'kernel',
@@ -57,16 +37,9 @@ class GraphConvolutionLayer(tf.keras.layers.Layer):
         self.built = True
 
     def call(self, nodes, edges):
-
-        # print("+++++++++++++++++++")
-        # print(nodes.shape)
-
-        # print(edges.shape)
-
-        
         support = tf.matmul(nodes, self.kernel) 
 
-        output = tf.sparse.sparse_dense_matmul(edges, support)
+        output = tf.matmul(edges, support)
 
         if self.use_bias:
             output += self.bias
@@ -81,9 +54,9 @@ class GraphConvolutionModel(tf.keras.Model):
     def __init__(self):
         super(GraphConvolutionModel, self).__init__()
 
-        self.graph_conv_1 = GraphConvolutionLayer(1433, 16, activation=tf.keras.activations.relu,
+        self.graph_conv_1 = GraphConvolutionLayer(1433, 16,
+                    activation=tf.keras.activations.relu,
                     kernel_regularizer=tf.keras.regularizers.l2(0.01))
-        # self.graph_conv_2 = GraphConvolutionLayer(7, activation=tf.keras.activations.softmax)
 
         self.graph_conv_2 = GraphConvolutionLayer(16, 7)
 
@@ -93,10 +66,6 @@ class GraphConvolutionModel(tf.keras.Model):
         edges = x[1]
 
         h = self.graph_conv_1(nodes, edges)
-
         logit = self.graph_conv_2(h, edges)
-
-        print("4444444444444444444")
-        print(logit.shape)
 
         return logit
