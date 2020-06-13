@@ -1,3 +1,3 @@
 # GNN
 
-![图神经网络的Tensorflow 2.0实现](GCN/gcn.ipynb)
+[图卷积神经网络(GCN)的Tensorflow 2.0实现](GCN/gcn.ipynb)
