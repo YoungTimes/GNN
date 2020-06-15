@@ -40,17 +40,23 @@ class CoraData():
 
         idx = np.array(idx_features_labels[:, 0], dtype=np.int32)
 
+        for self_idx in idx:
+            edges = np.vstack((edges, [self_idx, self_idx]))
+
         idx_map = {j: i for i, j in enumerate(idx)}
         edge_indexs = np.array(list(map(idx_map.get, edges.flatten())), dtype=np.int32)
         edge_indexs = edge_indexs.reshape(edges.shape)
+        # edge_indexs = np.array([[edge_index[0], np.append(edge_index[1], edge_index[0])] for edge_index in edge_indexs])
+
+        # print(edge_indexs)
+
+        # print("xxxxxxxxxxxxxxxx")
+        # print(idx_map)
 
         adjacency = {}
         for edge in edge_indexs:
             key = edge[0].astype(np.int32)
             value = edge[1].astype(np.int32)
-
-            if key == 139:
-                print("==================={}".format(value))
 
             target_value = np.array([])
             if key in adjacency.keys():
@@ -65,7 +71,6 @@ class CoraData():
         #             shape=(features.shape[0], features.shape[0]), dtype="float32")
 
         # adjacency = self.normalize_adj(adjacency)
-        print(adjacency)
 
         train_index = np.arange(150)
         val_index = np.arange(150, 500)

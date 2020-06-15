@@ -18,7 +18,7 @@ class NeighborAggregator(tf.keras.Model):
         self.use_bias = use_bias
         self.aggr_method = aggr_method
 
-        self.kernel = self.add_weight(shape = (self.input_dim, self.output_dim),
+        self.weight = self.add_weight(shape = (self.input_dim, self.output_dim),
                                       initializer = 'glorot_uniform',
                                       name = 'kernel')
 
@@ -29,11 +29,11 @@ class NeighborAggregator(tf.keras.Model):
 
     def call(self, neighbor_feature):
         if self.aggr_method == "mean":
-            aggr_neighbor = neighbor_feature.mean(dim=1)
+            aggr_neighbor = tf.math.reduce_mean(neighbor_feature, axis = 1)
         elif self.aggr_method == "sum":
-            aggr_neighbor = neighbor_feature.sum(dim=1)
+            aggr_neighbor = tf.math.reduce_sum(neighbor_feature, axis = 1)
         elif self.aggr_method == "max":
-            aggr_neighbor = neighbor_feature.max(dim=1)
+            aggr_neighbor = tf.math.reduce_max(neighbor_feature, axis = 1)
         else:
             raise ValueError("Unknown aggr type, expected sum, max, or mean, but got {}"
                              .format(self.aggr_method))
@@ -73,7 +73,7 @@ class SageGCN(tf.keras.Model):
         self.aggregator = NeighborAggregator(input_dim, hidden_dim,
                                              aggr_method=aggr_neighbor_method)
         
-        self.kernel = self.add_weight(shape = (self.input_dim, self.hidden_dim),
+        self.weight = self.add_weight(shape = (self.input_dim, self.hidden_dim),
                                       initializer = 'glorot_uniform',
                                       name = 'kernel')
 
@@ -105,13 +105,13 @@ class GraphSage(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.num_neighbors_list = num_neighbors_list
         self.num_layers = len(num_neighbors_list)
-        self.gcn = tf.keras.Sequential()
-        self.gcn.add(SageGCN(input_dim, hidden_dim[0]))
+        self.gcn = []# tf.keras.Sequential()
+        self.gcn.append(SageGCN(input_dim, hidden_dim[0]))
         
         for index in range(0, len(hidden_dim) - 2):
-            self.gcn.add(SageGCN(hidden_dim[index], hidden_dim[index + 1]))
+            self.gcn.append(SageGCN(hidden_dim[index], hidden_dim[index + 1]))
         
-        self.gcn.add(SageGCN(hidden_dim[-2], hidden_dim[-1], activation=None))
+        self.gcn.append(SageGCN(hidden_dim[-2], hidden_dim[-1], activation=None))
 
     def call(self, node_features_list):
         hidden = node_features_list
@@ -121,8 +121,7 @@ class GraphSage(tf.keras.Model):
             for hop in range(self.num_layers - l):
                 src_node_features = hidden[hop]
                 src_node_num = len(src_node_features)
-                neighbor_node_features = hidden[hop + 1] \
-                    .view((src_node_num, self.num_neighbors_list[hop], -1))
+                neighbor_node_features = tf.reshape(hidden[hop + 1], (src_node_num, self.num_neighbors_list[hop], -1))
                 h = gcn(src_node_features, neighbor_node_features)
                 next_hidden.append(h)
             hidden = next_hidden
