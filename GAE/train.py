@@ -28,7 +28,7 @@ test_index = np.where(data.test_mask)[0]
 
 model = GraphSage(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM,
                   num_neighbors_list=NUM_NEIGHBORS_LIST)
-print(model)
+# print(model)
 # criterion = nn.CrossEntropyLoss().to(DEVICE)
 # optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=5e-4)
 
@@ -40,24 +40,26 @@ def train():
     for e in range(EPOCHS):
         for batch in range(NUM_BATCH_PER_EPOCH):
             batch_src_index = np.random.choice(train_index, size=(BTACH_SIZE,))
-            print("00000000000000000000000000000")
-            print(batch_src_index)
-            batch_src_label = train_label[batch_src_index]
-            print(batch_src_label)
+            # print(batch_src_index)
+            batch_src_label = train_label[batch_src_index].astype(float)
+            # print(batch_src_label)
 
             batch_sampling_result = multihop_sampling(batch_src_index, NUM_NEIGHBORS_LIST, data.adjacency_dict)
-            batch_sampling_x = [torch.from_numpy(x[idx]).float().to(DEVICE) for idx in batch_sampling_result]
 
-            batch_train_logits = model(batch_sampling_x)
-            loss = loss_object(batch_train_logits, batch_src_label)
+            # batch_sampling_x = [torch.from_numpy(x[idx]).float().to(DEVICE) for idx in batch_sampling_result]
+            batch_sampling_x = [data.x[np.array(idx.astype(np.int32))] for idx in batch_sampling_result]
 
-            grads = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))
+            with tf.GradientTape() as tape:
+                batch_train_logits = model(batch_sampling_x)
+                loss = loss_object(batch_src_label, batch_train_logits)
+                grads = tape.gradient(loss, model.trainable_variables)
+
+                optimizer.apply_gradients(zip(grads, model.trainable_variables))
             # optimizer.zero_grad()
             # loss.backward()  # 反向传播计算参数的梯度
             # optimizer.step()  # 使用优化方法进行梯度更新
-            print("Epoch {:03d} Batch {:03d} Loss: {:.4f}".format(e, batch, loss.item()))
-        test()
+            print("Epoch {:03d} Batch {:03d} Loss: {:.4f}".format(e, batch, loss))
+        # test()
 
 
 def test():
