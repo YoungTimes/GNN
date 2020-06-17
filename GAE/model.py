@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 
 class NeighborAggregator(tf.keras.Model):
@@ -81,7 +80,7 @@ class SageGCN(tf.keras.Model):
     def call(self, src_node_features, neighbor_node_features):
         neighbor_hidden = self.aggregator(neighbor_node_features)
         self_hidden = tf.matmul(src_node_features, self.weight)
-        
+
         if self.aggr_hidden_method == "sum":
             hidden = self_hidden + neighbor_hidden
         elif self.aggr_hidden_method == "concat":
@@ -105,7 +104,7 @@ class GraphSage(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.num_neighbors_list = num_neighbors_list
         self.num_layers = len(num_neighbors_list)
-        self.gcn = []# tf.keras.Sequential()
+        self.gcn = []
         self.gcn.append(SageGCN(input_dim, hidden_dim[0]))
         
         for index in range(0, len(hidden_dim) - 2):
@@ -115,6 +114,7 @@ class GraphSage(tf.keras.Model):
 
     def call(self, node_features_list):
         hidden = node_features_list
+        
         for l in range(self.num_layers):
             next_hidden = []
             gcn = self.gcn[l]

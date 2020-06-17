@@ -20,33 +20,25 @@ Data = namedtuple('Data', ['x', 'y', 'adjacency_dict',
                            'train_mask', 'val_mask', 'test_mask'])
 
 data = CoraData().data()
-# x = data.x / data.x.sum(1, keepdims=True)  # 归一化数据，使得每一行和为1
 
 train_index = np.where(data.train_mask)[0]
 train_label = data.y[train_index]
 test_index = np.where(data.test_mask)[0]
+val_index = np.where(data.val_mask)[0]
 
 model = GraphSage(input_dim=INPUT_DIM, hidden_dim=HIDDEN_DIM,
                   num_neighbors_list=NUM_NEIGHBORS_LIST)
-# print(model)
-# criterion = nn.CrossEntropyLoss().to(DEVICE)
-# optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=5e-4)
 
 loss_object = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-optimizer=tf.keras.optimizers.Adam(learning_rate=0.01, decay=5e-5)
+optimizer=tf.keras.optimizers.Adam(learning_rate=0.01, decay=5e-4)
 
 def train():
-    # model.train()
     for e in range(EPOCHS):
         for batch in range(NUM_BATCH_PER_EPOCH):
             batch_src_index = np.random.choice(train_index, size=(BTACH_SIZE,))
-            # print(batch_src_index)
             batch_src_label = train_label[batch_src_index].astype(float)
-            # print(batch_src_label)
 
             batch_sampling_result = multihop_sampling(batch_src_index, NUM_NEIGHBORS_LIST, data.adjacency_dict)
-
-            # batch_sampling_x = [torch.from_numpy(x[idx]).float().to(DEVICE) for idx in batch_sampling_result]
             batch_sampling_x = [data.x[np.array(idx.astype(np.int32))] for idx in batch_sampling_result]
 
             with tf.GradientTape() as tape:
@@ -55,25 +47,27 @@ def train():
                 grads = tape.gradient(loss, model.trainable_variables)
 
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
-            # optimizer.zero_grad()
-            # loss.backward()  # 反向传播计算参数的梯度
-            # optimizer.step()  # 使用优化方法进行梯度更新
+
             print("Epoch {:03d} Batch {:03d} Loss: {:.4f}".format(e, batch, loss))
-        # test()
+        
+        train_accuracy = test(train_index)
+        val_accuracy = test(val_index)
+        test_accuracy = test(test_index)
 
+        print("Epoch {:03d} train accuracy: {} val accuracy: {} test accuracy:{}".format(e, train_accuracy, val_accuracy, test_accuracy))
+        
+        # ISSUE: https://stackoverflow.com/questions/58947679/no-gradients-provided-for-any-variable-in-tensorflow2-0
 
-def test():
-    # model.eval()
-    # with torch.no_grad():
-    test_sampling_result = multihop_sampling(test_index, NUM_NEIGHBORS_LIST, data.adjacency_dict)
-    # test_x = [torch.from_numpy(x[idx]).float().to(DEVICE) for idx in test_sampling_result]
-    test_x = [x[idx].float() for idx in test_sampling_result]
+def test(index):
+    test_sampling_result = multihop_sampling(index, NUM_NEIGHBORS_LIST, data.adjacency_dict)
+    test_x = [data.x[idx.astype(np.int32)] for idx in test_sampling_result]
     test_logits = model(test_x)
-    # test_label = torch.from_numpy(data.y[test_index]).long().to(DEVICE)
-    test_label = data.y[test_index]
-    predict_y = test_logits.max(1)[1]
-    accuarcy = torch.eq(predict_y, test_label).float().mean().item()
-    print("Test Accuracy: ", accuarcy)
+    test_label = data.y[index]
+
+    ll = tf.math.equal(tf.math.argmax(test_label, -1), tf.math.argmax(test_logits, -1))
+    accuarcy = tf.reduce_mean(tf.cast(ll, dtype=tf.float32))
+
+    return accuarcy
 
 
 if __name__ == '__main__':

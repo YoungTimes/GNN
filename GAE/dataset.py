@@ -46,13 +46,7 @@ class CoraData():
         idx_map = {j: i for i, j in enumerate(idx)}
         edge_indexs = np.array(list(map(idx_map.get, edges.flatten())), dtype=np.int32)
         edge_indexs = edge_indexs.reshape(edges.shape)
-        # edge_indexs = np.array([[edge_index[0], np.append(edge_index[1], edge_index[0])] for edge_index in edge_indexs])
-
-        # print(edge_indexs)
-
-        # print("xxxxxxxxxxxxxxxx")
-        # print(idx_map)
-
+        
         adjacency = {}
         for edge in edge_indexs:
             key = edge[0].astype(np.int32)
@@ -66,11 +60,6 @@ class CoraData():
 
             adjacency.update({key : target_value})
 
-        # adjacency = sp.coo_matrix((np.ones(len(edge_indexs)),
-        #             (edge_indexs[:, 0], edge_indexs[:, 1])),
-        #             shape=(features.shape[0], features.shape[0]), dtype="float32")
-
-        # adjacency = self.normalize_adj(adjacency)
 
         train_index = np.arange(150)
         val_index = np.arange(150, 500)
@@ -87,7 +76,6 @@ class CoraData():
 
         return Data(x=features, y=labels, adjacency_dict=adjacency,
             train_mask=train_mask, val_mask=val_mask, test_mask=test_mask)
-        # return features, labels, adjacency, train_mask, val_mask, test_mask
 
     def encode_onehot(self, labels):
         classes = set(labels)
