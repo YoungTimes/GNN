@@ -138,11 +138,13 @@ class GraphAttention(tf.keras.layers.Layer):
 
         # Aggregate the heads' output according to the reduction method
         if self.attn_heads_reduction == 'concat':
-            output = K.concatenate(outputs)  # (N x KF')
+            output = tf.concat(outputs)  # (N x KF')
         else:
-            output = K.mean(K.stack(outputs), axis=0)  # N x F')
+            # output = K.mean(K.stack(outputs), axis=0)  # N x F')
+            output = tf.reduce_mean(tf.stack(outputs), axis=0)  # N x F')
 
         output = self.activation(output)
+
         return output
 
     def compute_output_shape(self, input_shape):
