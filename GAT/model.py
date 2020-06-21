@@ -128,7 +128,7 @@ class GraphAttentionModel(tf.keras.Model):
     def __init__(self, in_dim, hidden_dim, out_dim, num_heads):
         super(GraphAttentionModel, self).__init__()
 
-        self.attention_layer1 = MultiHeadGATLayer(in_dim, hidden_dim, attn_heads = num_heads, activation = tf.keras.activations.relu)
+        self.attention_layer1 = MultiHeadGATLayer(in_dim, hidden_dim, attn_heads = num_heads, activation = tf.keras.activations.elu)
 
         self.attention_layer2 = MultiHeadGATLayer(hidden_dim * num_heads, out_dim, attn_heads = 1)
  

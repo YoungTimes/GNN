@@ -74,22 +74,22 @@ def train():
         # ISSUE: https://stackoverflow.com/questions/58947679/no-gradients-provided-for-any-variable-in-tensorflow2-0
 
     # 训练过程可视化
-    # fig, axes = plt.subplots(4, sharex=True, figsize=(12, 8))
-    # fig.suptitle('Training Metrics')
+    fig, axes = plt.subplots(4, sharex=True, figsize=(12, 8))
+    fig.suptitle('Training Metrics')
 
-    # axes[0].set_ylabel("Loss", fontsize=14)
-    # axes[0].plot(train_loss_results)
+    axes[0].set_ylabel("Loss", fontsize=14)
+    axes[0].plot(train_loss_results)
 
-    # axes[1].set_ylabel("Accuracy", fontsize=14)
-    # axes[1].plot(train_accuracy_results)
+    axes[1].set_ylabel("Accuracy", fontsize=14)
+    axes[1].plot(train_accuracy_results)
 
-    # axes[2].set_ylabel("Val Acc", fontsize=14)
-    # axes[2].plot(train_val_results)
+    axes[2].set_ylabel("Val Acc", fontsize=14)
+    axes[2].plot(train_val_results)
 
-    # axes[3].set_ylabel("Test Acc", fontsize=14)
-    # axes[3].plot(train_test_results)
+    axes[3].set_ylabel("Test Acc", fontsize=14)
+    axes[3].plot(train_test_results)
 
-    # plt.show()
+    plt.show()
 
 def test(index):
     test_x = data.x[index]
