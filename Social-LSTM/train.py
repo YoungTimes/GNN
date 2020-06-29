@@ -82,6 +82,26 @@ def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
     sy : std dev of the distribution in y
     rho : Correlation factor of the distribution
     '''
+    # print("========================x================")
+    # print(x)
+
+    # print("========================y================")
+    # print(y)
+
+    # print("========================mux================")
+    # print(mux)
+
+    # print("========================muy================")
+    # print(muy)
+
+    # print("========================sx================")
+    # print(sx)
+
+    # print("========================sy================")
+    # print(sy)
+
+    # print("========================rho================")
+    # print(rho)
 
     # eq 3 in the paper
     # and eq 24 & 25 in Graves (2013)
@@ -92,6 +112,7 @@ def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
     sxsy = tf.math.multiply(sx, sy)
     # Calculate the exponential factor
     z = tf.math.square(tf.math.divide(normx, sx)) + tf.math.square(tf.math.divide(normy, sy)) - 2*tf.math.divide(tf.math.multiply(rho, tf.math.multiply(normx, normy)), sxsy)
+    
     negRho = 1 - tf.math.square(rho)
     # Numerator
     result = tf.math.exp(tf.math.divide(-z, 2*negRho))
@@ -136,16 +157,18 @@ def get_lossfunc(z_mux, z_muy, z_sx, z_sy, z_corr, x_data, y_data):
     x_data : target x points
     y_data : target y points
     '''
-    step = tf.constant(1e-3, dtype=tf.float32, shape=(1, 1))
+    # step = tf.constant(1e-3, dtype=tf.float32, shape=(1, 1))
 
     # Calculate the PDF of the data w.r.t to the distribution
-    result0_1 = tf_2d_normal(x_data, y_data, z_mux, z_muy, z_sx, z_sy, z_corr)
-    result0_2 = tf_2d_normal(tf.add(x_data, step), y_data, z_mux, z_muy, z_sx, z_sy, z_corr)
-    result0_3 = tf_2d_normal(x_data, tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
-    result0_4 = tf_2d_normal(tf.add(x_data, step), tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
+    result0 = tf_2d_normal(x_data, y_data, z_mux, z_muy, z_sx, z_sy, z_corr)
 
-    result0 = tf.math.divide(tf.add(tf.add(tf.add(result0_1, result0_2), result0_3), result0_4), tf.constant(4.0, dtype=tf.float32, shape=(1, 1)))
-    result0 = tf.math.multiply(tf.math.multiply(result0, step), step)
+    # print("===========================:{}".format(result0))
+    # result0_2 = tf_2d_normal(tf.add(x_data, step), y_data, z_mux, z_muy, z_sx, z_sy, z_corr)
+    # result0_3 = tf_2d_normal(x_data, tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
+    # result0_4 = tf_2d_normal(tf.add(x_data, step), tf.add(y_data, step), z_mux, z_muy, z_sx, z_sy, z_corr)
+
+    # result0 = tf.math.divide(tf.add(tf.add(tf.add(result0_1, result0_2), result0_3), result0_4), tf.constant(4.0, dtype=tf.float32, shape=(1, 1)))
+    # result0 = tf.math.multiply(tf.math.multiply(result0, step), step)
 
     # For numerical stability purposes
     epsilon = 1e-20
@@ -154,6 +177,9 @@ def get_lossfunc(z_mux, z_muy, z_sx, z_sy, z_corr, x_data, y_data):
     # summation
     # result1 = tf.reduce_sum(result0, 1, keep_dims=True)
     # Apply the log operation
+#     tf.clip_by_value(
+#     t, clip_value_min, clip_value_max, name=None
+# )
     result1 = -tf.math.log(tf.math.maximum(result0, epsilon))  # Numerical stability
 
     # TODO: For now, implementing loss func over all time-steps
@@ -219,7 +245,7 @@ def sample_gaussian_2d(mux, muy, sx, sy, rho):
 #     for num in range(num_points):
 #         x, y = sample_gaussian_2d(muxs[num], muys[num], sxs[num], sys[num], rhos[num])
 
-def test(args, model):
+def test(args, checkpoint_dir):
     # Dataset to get data from
     dataset = [args.test_dataset]
 
@@ -230,10 +256,18 @@ def test(args, model):
     # Reset the data pointers of the data loader object
     data_loader.reset_batch_pointer()
 
+    tf.train.latest_checkpoint(checkpoint_dir)
+
+    test_model = Model(args, batch_size=1)
+
+    test_model.load_weights(tf.train.latest_checkpoint(checkpoint_dir))
+
+    test_model.build(tf.TensorShape([1, None]))
+
     # Maintain the total_error until now
     total_error = 0
     counter = 0
-    model.reset_states()
+    # model.reset_states()
     for b in range(data_loader.num_batches):
         # Get the source, target data for the next batch
         x, y = data_loader.next_batch()
@@ -247,10 +281,14 @@ def test(args, model):
 
         complete_traj = x[0][:args.obs_length]
 
+        test_model.reset_states()
+
+        test_model.initial_state = None
+
         for idx in range(args.pred_length):
             tensor_x = tf.convert_to_tensor(obs_observed_traj)
 
-            logits = model(tensor_x)
+            logits = test_model(tensor_x)
 
             # print("logit:{}".format(logits))
 
@@ -262,7 +300,7 @@ def test(args, model):
             # print("o_sy:{}".format(o_sy))
             # print("o_corr:{}".format(o_corr))
 
-            next_x, next_y = sample_gaussian_2d(o_mux[0][-1][0], o_muy[0][-1][0], o_sx[0][-1][0], o_sy[0][-1][0], o_corr[0][-1][0])
+            next_x, next_y = o_mux[0][-1][0], o_muy[0][-1][0] #sample_gaussian_2d(o_mux[0][-1][0], o_muy[0][-1][0], o_sx[0][-1][0], o_sy[0][-1][0], o_corr[0][-1][0])
 
             obs_observed_traj = tf.expand_dims([[next_x, next_y]], 0)
 
@@ -275,7 +313,7 @@ def test(args, model):
 
         exit(0)
 
-        total_error += get_mean_error(complete_traj, y[0], args.obs_length)
+        total_error += get_mean_error(complete_traj, x[0], args.obs_length)
 
         print("Processed trajectory number: {} out of {} trajectories".format(b, data_loader.num_batches))
 
@@ -297,7 +335,7 @@ def train(args):
     #     pickle.dump(args, f)
 
     # Create a Vanilla LSTM model with the arguments
-    model = Model(args)
+    model = Model(args, batch_size = args.batch_size)
 
     train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
     optimizer = tf.keras.optimizers.RMSprop(args.learning_rate)
@@ -307,6 +345,11 @@ def train(args):
     test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
     train_summary_writer = tf.summary.create_file_writer(train_log_dir)
     test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+    # 检查点保存至的目录
+    checkpoint_dir = './training_checkpoints'
+    # 检查点的文件名
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
 
     for e in range(args.num_epochs):
 
@@ -321,10 +364,12 @@ def train(args):
 
             x, y = data_loader.next_batch()
 
+            model.initial_state = None
+
             with tf.GradientTape() as tape:
                 tensor_x = tf.convert_to_tensor(x, dtype=tf.float32)
 
-                print("Input tensor x shape:{}".format(tensor_x.shape))
+                # print("Input tensor x shape:{}".format(tensor_x.shape))
 
                 logits = model(tensor_x)
 
@@ -333,8 +378,8 @@ def train(args):
                 # reshape target data so that it aligns with predictions
                 tensor_y = tf.convert_to_tensor(y, dtype=tf.float32)
 
-                    # flat_target_data = tf.reshape(tensor_y, [-1, 2])
-                    # Extract the x-coordinates and y-coordinates from the target data
+                # flat_target_data = tf.reshape(tensor_y, [-1, 2])
+                # Extract the x-coordinates and y-coordinates from the target data
                 [x_data, y_data] = tf.split(tensor_y, 2, -1)
 
                 # Compute the loss function
@@ -348,7 +393,7 @@ def train(args):
                 optimizer.lr.assign(args.learning_rate * (args.decay_rate ** e))
                 optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-                tf.print("learning rate:{} {}/{}".format(optimizer.lr, batch, e))
+                # tf.print("learning rate:{} {}/{}".format(optimizer.lr, batch, e))
 
                 train_loss(loss)
 
@@ -363,7 +408,10 @@ def train(args):
             tf.summary.scalar('loss', train_loss.result(), step=e)
             # tf.summary.scalar('accuracy', train_accuracy.result(), step=epoch)
 
-    test(args, model)
+        model.save_weights(checkpoint_prefix.format(epoch=e))
+
+
+    test(args)
 
 
 if __name__ == '__main__':

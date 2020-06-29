@@ -28,7 +28,7 @@ import tensorflow as tf
 
 class Model(tf.keras.Model):
 
-    def __init__(self, args):
+    def __init__(self, args, batch_size):
         super(Model, self).__init__()
         self.args = args
 
@@ -44,11 +44,15 @@ class Model(tf.keras.Model):
         # Output size is the set of parameters (mu, sigma, corr)
         self.output_size = 5  # 2 mu, 2 sigma and 1 corr
 
+        self.input_layer = tf.keras.layers.Input(batch_shape=(batch_size, None, 2))
+
         self.embedding_layer = tf.keras.layers.Dense(args.embedding_size, activation = None) # EmbeddingLayer(args)
 
-        self.lstm_layer = tf.keras.layers.LSTM(args.rnn_size, return_sequences=True)
+        self.lstm_layer = tf.keras.layers.LSTM(args.rnn_size, return_sequences=True, return_state = True, stateful = True)
 
         self.dense = tf.keras.layers.Dense(self.output_size)
+
+        self.initial_state = None
 
     def call(self, x):
         # print("=========================x shape:{}".format(x.shape))
@@ -56,12 +60,15 @@ class Model(tf.keras.Model):
         # inputs = tf.split(x, self.args.seq_length, 1)
         # inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
 
+        x = self.input_layer(x)
         # IN:(50, 10, 2), OUT:(50, 10, 128)
         x = self.embedding_layer(x)
 
         print("=========================x11 shape:{}".format(x.shape))
         # IN: (50, 10, 128), OUT:()
-        outputs = self.lstm_layer(x)
+        outputs, state_h, state_c = self.lstm_layer(x, initial_state = self.initial_state)
+
+        self.initial_state = [state_h, state_c]
 
         print("===================outputs shape:{}".format(outputs.shape))
 
