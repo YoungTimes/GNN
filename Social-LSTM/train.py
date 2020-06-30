@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--keep_prob', type=float, default=0.8,
                         help='dropout keep probability')
     # Dimension of the embeddings parameter
-    parser.add_argument('--embedding_size', type=int, default=128,
+    parser.add_argument('--embedding_size', type=int, default=64,
                         help='Embedding dimension for the spatial coordinates')
     parser.add_argument('--leaveDataset', type=int, default=1,
                         help='The dataset index to be left out in training')
@@ -67,7 +67,8 @@ def main():
                         help='Predicted length of the trajectory')
 
     args = parser.parse_args()
-    train(args)
+    test(args)
+    # train(args)
 
 
 def tf_2d_normal(x, y, mux, muy, sx, sy, rho):
@@ -211,6 +212,9 @@ def get_mean_error(pred_traj, true_traj, observed_length):
         # The true position
         true_pos = true_traj[i, :]
 
+        print("==================:pred_pos{}".format(pred_pos))
+        print("==================:true_pos{}".format(true_pos))
+
         # The euclidean distance is the error
         error[i-observed_length] = np.linalg.norm(true_pos - pred_pos)
 
@@ -245,7 +249,9 @@ def sample_gaussian_2d(mux, muy, sx, sy, rho):
 #     for num in range(num_points):
 #         x, y = sample_gaussian_2d(muxs[num], muys[num], sxs[num], sys[num], rhos[num])
 
-def test(args, checkpoint_dir):
+def test(args):
+    checkpoint_dir = './training_checkpoints'
+
     # Dataset to get data from
     dataset = [args.test_dataset]
 
@@ -258,16 +264,17 @@ def test(args, checkpoint_dir):
 
     tf.train.latest_checkpoint(checkpoint_dir)
 
-    test_model = Model(args, batch_size=1)
+    test_model = Model(args)
 
     test_model.load_weights(tf.train.latest_checkpoint(checkpoint_dir))
 
-    test_model.build(tf.TensorShape([1, None]))
+    # test_model.build(tf.TensorShape([1, None,  ]))
 
     # Maintain the total_error until now
     total_error = 0
     counter = 0
     # model.reset_states()
+     #data_loader.num_batches = 20
     for b in range(data_loader.num_batches):
         # Get the source, target data for the next batch
         x, y = data_loader.next_batch()
@@ -281,7 +288,7 @@ def test(args, checkpoint_dir):
 
         complete_traj = x[0][:args.obs_length]
 
-        test_model.reset_states()
+        # test_model.reset_states()
 
         test_model.initial_state = None
 
@@ -309,11 +316,10 @@ def test(args, checkpoint_dir):
 
             complete_traj = np.vstack((complete_traj, [next_x, next_y]))
 
-        plot_trajectories(complete_traj, x[0])
-
-        exit(0)
 
         total_error += get_mean_error(complete_traj, x[0], args.obs_length)
+
+        plot_trajectories(complete_traj, x[0])
 
         print("Processed trajectory number: {} out of {} trajectories".format(b, data_loader.num_batches))
 
@@ -335,7 +341,7 @@ def train(args):
     #     pickle.dump(args, f)
 
     # Create a Vanilla LSTM model with the arguments
-    model = Model(args, batch_size = args.batch_size)
+    model = Model(args)
 
     train_loss = tf.keras.metrics.Mean('train_loss', dtype=tf.float32)
     optimizer = tf.keras.optimizers.RMSprop(args.learning_rate)
@@ -354,7 +360,7 @@ def train(args):
     for e in range(args.num_epochs):
 
         data_loader.reset_batch_pointer()
-        model.reset_states()
+        # model.reset_states()
 
         for batch in range(data_loader.num_batches):
             start = time.time()
@@ -411,7 +417,7 @@ def train(args):
         model.save_weights(checkpoint_prefix.format(epoch=e))
 
 
-    test(args)
+    #test(args, checkpoint_dir)
 
 
 if __name__ == '__main__':
