@@ -3,22 +3,14 @@ import pickle
 import numpy as np
 import random
 
-
-# TODO : (improve) Add functionality to retrieve data only from specific datasets
 class DataLoader():
 
     def __init__(self, batch_size=50, seq_length=5, datasets=[0, 1, 2, 3, 4], forcePreProcess=False):
-        '''
-        Initialiser function for the DataLoader class
-        params:
-        batch_size : Size of the mini-batch
-        seq_length : RNN sequence length
-        '''
         # List of data directories where raw data resides
-        # self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
-        #                  './data/ucy/zara/zara01', './data/ucy/zara/zara02',
-        #                  './data/ucy/univ']
-        self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
+        self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
+                         './data/ucy/zara/zara01', './data/ucy/zara/zara02',
+                         './data/ucy/univ']
+        # self.data_dirs = ['./data/eth/univ', './data/eth/hotel']
 
         self.used_data_dirs = [self.data_dirs[x] for x in datasets]
 
@@ -44,18 +36,6 @@ class DataLoader():
         self.reset_batch_pointer()
 
     def preprocess(self, data_dirs, data_file):
-        '''
-        The function that pre-processes the pixel_pos.csv files of each dataset
-        into data that can be used
-        params:
-        data_dirs : List of directories where raw data resides
-        data_file : The file into which all the pre-processed data needs to be stored
-        '''
-        # all_ped_data would be a dictionary with mapping from each ped to their
-        # trajectories given by matrix 3 x numPoints with each column
-        # in the order x, y, frameId
-        # Pedestrians from all datasets are combined
-        # Dataset pedestrian indices are stored in dataset_indices
         all_ped_data = {}
         dataset_indices = []
         current_ped = 0
@@ -63,6 +43,8 @@ class DataLoader():
         for directory in data_dirs:
             # Define the path to its respective csv file
             file_path = os.path.join(directory, 'pixel_pos.csv')
+
+            print("processing {}".format(file_path))
 
             # Load data from the csv file
             # Data is a 4 x numTrajPoints matrix
@@ -86,6 +68,8 @@ class DataLoader():
             dataset_indices.append(current_ped+numPeds)
             current_ped += numPeds
 
+            print("total ped nums: {}".format(numPeds))
+
         # The complete data is a tuple of all pedestrian data, and dataset ped indices
         complete_data = (all_ped_data, dataset_indices)
         # Store the complete data into the pickle file
@@ -94,11 +78,6 @@ class DataLoader():
         f.close()
 
     def load_preprocessed(self, data_file):
-        '''
-        Function to load the pre-processed data into the DataLoader object
-        params:
-        data_file : The path to the pickled data file
-        '''
         # Load data from the pickled file
         f = open(data_file, "rb")
         self.raw_data = pickle.load(f)
@@ -124,6 +103,7 @@ class DataLoader():
                 # Number of batches this datapoint is worth
                 counter += int(traj.shape[1] / ((self.seq_length+2)))
 
+        print("all ped data len: {}, seq length: {}".format(len(all_ped_data), self.seq_length))
         # Calculate the number of batches (each of batch_size) in the data
         self.num_batches = int(counter / self.batch_size)
 

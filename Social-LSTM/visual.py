@@ -1,7 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
+from scipy.stats import multivariate_normal
 
-def plot_trajectories(pred_traj, true_traj):
+def draw_heatmap(mux, muy, sx, sy, rho, plt = None, bound = 0.1):
+    x, y = np.meshgrid(np.linspace(mux - bound, mux + bound, 200),
+                       np.linspace(muy - bound, muy + bound, 200))
+    
+    mean = [mux, muy]
+
+    # Extract covariance matrix
+    cov = [[sx * sx, rho * sx * sy], [rho * sx * sy, sy * sy]]
+    
+    gaussian = multivariate_normal(mean = mean, cov = cov)
+    d = np.dstack([x, y])
+    z = gaussian.pdf(d)
+
+    z_min, z_max = -np.abs(z).max(), np.abs(z).max()
+
+    plt.pcolormesh(x, y, z, cmap='RdBu', vmin=z_min, vmax=z_max, alpha = 0.5)
+
+def visual():
+    data_file = "./pred_results.pkl"
+
+    f = open(data_file, "rb")
+    visual_data = pickle.load(f)
+    f.close()
+
+    pred_trajs = visual_data[0]
+    truth_trajs = visual_data[1]
+    gauss_params = visual_data[2]
+
+    traj_num = len(pred_trajs)
+
+    for index in range(traj_num):
+        visual_trajectories(pred_trajs[index], truth_trajs[index], gauss_params[index])
+
+
+
+def visual_trajectories(pred_traj, true_traj, gauss_param):
     fig_width = 10
     fig_height = 10
 
@@ -15,7 +52,5 @@ def plot_trajectories(pred_traj, true_traj):
 
     plt.show()
 
-# true_traj = np.array([[1,2], [3,4]])
-# pred_traj = np.array([[1,3], [3,6]])
 
-# plot_trajectories(true_traj, pred_traj)
+visual()

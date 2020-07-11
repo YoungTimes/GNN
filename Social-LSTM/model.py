@@ -48,11 +48,31 @@ class Model(tf.keras.Model):
 
         self.embedding_layer = tf.keras.layers.Dense(args.embedding_size, activation = tf.keras.activations.relu) # EmbeddingLayer(args)
 
-        self.lstm_layer = tf.keras.layers.LSTM(args.rnn_size, return_sequences=True, return_state = True)
+        self.lstm_layer = tf.keras.layers.LSTM(args.rnn_size, return_sequences=True,
+                                            return_state = True,
+                                            stateful=True)
 
         self.dense = tf.keras.layers.Dense(self.output_size)
 
-        self.initial_state = None
+        # self.initial_state = None
+
+        # self.lstm_layer = tf.keras.Sequential([
+        #     tf.keras.layers.Dense(args.embedding_size,
+        #         activation = tf.keras.activations.relu),
+        # ])
+
+        self.model = tf.keras.Sequential([
+            tf.keras.layers.Dense(args.embedding_size, activation = tf.keras.activations.relu,
+                batch_input_shape = [args.batch_size, None, 2]),
+        # self.model.add(tf.keras.layers.LSTM(args.rnn_size, return_sequences=True,
+        #                                     return_state = True,
+        #                                     stateful=True))
+            tf.keras.layers.GRU(args.rnn_size,
+                                return_sequences=True,
+                                stateful=True,
+                                recurrent_initializer='glorot_uniform'),
+            tf.keras.layers.Dense(self.output_size)
+        ])
 
     def call(self, x):
         # print("=========================x shape:{}".format(x.shape))
@@ -62,19 +82,21 @@ class Model(tf.keras.Model):
 
         # x = self.input_layer(x)
         # IN:(50, 10, 2), OUT:(50, 10, 128)
-        x = self.embedding_layer(x)
+        # x = self.embedding_layer(x)
 
-        print("=========================x11 shape:{}".format(x.shape))
-        # IN: (50, 10, 128), OUT:()
-        outputs, state_h, state_c = self.lstm_layer(x, initial_state = self.initial_state)
+        # # print("=========================x11 shape:{}".format(x.shape))
+        # # # IN: (50, 10, 128), OUT:()
+        # outputs, state_h, state_c = self.lstm_layer(x)
 
-        self.initial_state = [state_h, state_c]
+        # # self.initial_state = [state_h, state_c]
 
-        print("===================outputs shape:{}".format(outputs.shape))
+        # # print("===================outputs shape:{}".format(outputs.shape))
 
-        output = self.dense(outputs)
+        # output = self.dense(outputs)
 
-        print("=====================output shape:{}".format(output.shape))
+        output = self.model(x)
+
+        # print("=====================output shape:{}".format(output.shape))
 
         return output
         # inputs = tf.split(x, self.args.seq_length, 1)
