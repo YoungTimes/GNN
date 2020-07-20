@@ -3,15 +3,10 @@ import pickle
 import numpy as np
 import random
 
-class DataLoader():
+class SocialDataLoader():
 
     def __init__(self, batch_size=50, seq_length=5, max_num_peds=40, datasets=[0, 1, 2, 3, 4], forcePreProcess=False):
-        '''
-        Initialiser function for the DataLoader class
-        params:
-        batch_size : Size of the mini-batch
-        seq_length : RNN sequence length
-        '''
+
         # List of data directories where raw data resides
         # self.data_dirs = ['./data/eth/univ', './data/eth/hotel',
         #                  './data/ucy/zara/zara01', './data/ucy/zara/zara02',
@@ -27,10 +22,10 @@ class DataLoader():
         self.batch_size = batch_size
         self.seq_length = seq_length
 
-        self.maxNumPeds = max_num_peds
+        self.max_num_peds = max_num_peds
 
         # Define the path of the file in which the data needs to be stored
-        data_file = os.path.join(self.data_dir, "trajectories.cpkl")
+        data_file = os.path.join(self.data_dir, "social_trajectories.cpkl")
 
         # If the file doesn't exist already or if forcePreProcess is true
         if not(os.path.exists(data_file)) or forcePreProcess:
@@ -53,15 +48,18 @@ class DataLoader():
         '''
 
         # all_frame_data would be a list of numpy arrays corresponding to each dataset
-        # Each numpy array would be of size (numFrames, maxNumPeds, 3) where each pedestrian's
+        # Each numpy array would be of size (numFrames, max_num_peds, 3) where each pedestrian's
         # pedId, x, y , in each frame is stored
         all_frame_data = []
         # frameList_data would be a list of lists corresponding to each dataset
         # Each list would contain the frameIds of all the frames in the dataset
-        frameList_data = []
+        frame_ids_data = []
         # numPeds_data would be a list of lists corresponding to each dataset
         # Ech list would contain the number of pedestrians in each frame in the dataset
-        numPeds_data = []
+        num_peds_data = []
+
+        ped_ids_data = []
+
         # Index of the current dataset
         dataset_index = 0
 
@@ -74,58 +72,84 @@ class DataLoader():
             # Load the data from the csv file
             data = np.genfromtxt(file_path, delimiter=',')
 
+            # print("shape of data:{}".format(data.shape))
+
             # Frame IDs of the frames in the current dataset
-            frameList = np.unique(data[0, :]).tolist()
+            frame_id_data = np.unique(data[0, :]).tolist()
+
+            # print("frame_id_data")
+            # print(frame_id_data)
+
             # Number of frames
-            numFrames = len(frameList)
+            num_frames = len(frame_id_data)
 
             # Add the list of frameIDs to the frameList_data
-            frameList_data.append(frameList)
+            frame_ids_data.append(frame_id_data)
             # Initialize the list of numPeds for the current dataset
-            numPeds_data.append([])
+
+            # ped_id_data = np.unique(data[1, :]).tolist()
+
+            num_peds_data.append([])
+            ped_ids_data.append([])
             # Initialize the numpy array for the current dataset
-            all_frame_data.append(np.zeros((numFrames, self.maxNumPeds, 3)))
+            all_frame_data.append(np.zeros((num_frames, self.max_num_peds, 3)))
 
             # index to maintain the current frame
             curr_frame = 0
-            for frame in frameList:
+            for frame in frame_id_data:
                 # Extract all pedestrians in current frame
-                pedsInFrame = data[:, data[0, :] == frame]
+                peds_in_frame = data[:, data[0, :] == frame]
+
+                # print("peds in frame:{}".format(peds_in_frame.shape))
+
+                # print(peds_in_frame)
 
                 # Extract peds list
-                pedsList = pedsInFrame[1, :].tolist()
+                peds_list = peds_in_frame[1, :].tolist()
 
                 # Helper print statement to figure out the maximum number of peds in any frame in any dataset
                 # if len(pedsList) > 1:
                 # print len(pedsList)
                 # DEBUG
                 #    continue
+                # print("=======================(before ped_ids_data[dataset_index]=========================")
+                # print(ped_ids_data[dataset_index])
 
                 # Add number of peds in the current frame to the stored data
-                numPeds_data[dataset_index].append(len(pedsList))
+                num_peds_data[dataset_index].append(len(peds_list))
+                ped_ids_data[dataset_index].append(peds_list)
+
+                # print("========================ped-list===============")
+                # print(peds_list)
+
+                # print("=======================(after ped_ids_data[dataset_index]=========================")
+                # print(ped_ids_data[dataset_index])
 
                 # Initialize the row of the numpy array
-                pedsWithPos = []
+                peds_with_pos = []
 
                 # For each ped in the current frame
-                for ped in pedsList:
+                for ped in peds_list:
                     # Extract their x and y positions
-                    current_x = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
-                    current_y = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
+                    current_x = peds_in_frame[3, peds_in_frame[1, :] == ped][0]
+                    current_y = peds_in_frame[2, peds_in_frame[1, :] == ped][0]
 
                     # Add their pedID, x, y to the row of the numpy array
-                    pedsWithPos.append([ped, current_x, current_y])
+                    peds_with_pos.append([ped, current_x, current_y])
 
                 # Add the details of all the peds in the current frame to all_frame_data
-                all_frame_data[dataset_index][curr_frame, 0:len(pedsList), :] = np.array(pedsWithPos)
+                all_frame_data[dataset_index][curr_frame, 0 : len(peds_list), :] = np.array(peds_with_pos)
                 # Increment the frame index
                 curr_frame += 1
             # Increment the dataset index
             dataset_index += 1
 
+        # print("==================ped_ids_data========================")
+        # print(ped_ids_data)
+
         # Save the tuple (all_frame_data, frameList_data, numPeds_data) in the pickle file
         f = open(data_file, "wb")
-        pickle.dump((all_frame_data, frameList_data, numPeds_data), f, protocol=2)
+        pickle.dump((all_frame_data, frame_ids_data, num_peds_data, ped_ids_data), f, protocol=2)
         f.close()
 
     def load_preprocessed(self, data_file):
@@ -141,8 +165,10 @@ class DataLoader():
 
         # Get all the data from the pickle file
         self.data = self.raw_data[0]
-        self.frameList = self.raw_data[1]
-        self.numPedsList = self.raw_data[2]
+        self.frame_list = self.raw_data[1]
+        self.num_peds_list = self.raw_data[2]
+        self.peds_list = self.raw_data[3]
+
         counter = 0
 
         # For each dataset
@@ -165,44 +191,61 @@ class DataLoader():
         y_batch = []
         # Dataset data
         d = []
+
+        # pedlist per sequence
+        num_peds_batch = []
+        # pedlist per sequence
+        peds_batch = []
+        #return target_id
+        # target_id_batch = []
+
         # Iteration index
         i = 0
         while i < self.batch_size:
             # Extract the frame data of the current dataset
             frame_data = self.data[self.dataset_pointer]
+            num_peds_list = self.num_peds_list[self.dataset_pointer]
+            peds_list = self.peds_list[self.dataset_pointer]
+
             # Get the frame pointer for the current dataset
             idx = self.frame_pointer
             # While there is still seq_length number of frames left in the current dataset
-            if idx + self.seq_length < frame_data.shape[0]:
+            if idx + self.seq_length + 1 < frame_data.shape[0]:
                 # All the data in this sequence
-                seq_frame_data = frame_data[idx:idx+self.seq_length+1, :]
-                seq_source_frame_data = frame_data[idx:idx+self.seq_length, :]
-                seq_target_frame_data = frame_data[idx+1:idx+self.seq_length+1, :]
+                # seq_frame_data = frame_data[idx:idx+self.seq_length+1, :]
+                seq_source_frame_data = frame_data[idx : idx + self.seq_length, :]
+                seq_target_frame_data = frame_data[idx+1 : idx + self.seq_length + 1, :]
+
+                seq_num_peds_list = num_peds_list[idx : idx + self.seq_length]
+                seq_peds_list = peds_list[idx : idx + self.seq_length]
                 # Number of unique peds in this sequence of frames
-                pedID_list = np.unique(seq_frame_data[:, :, 0])
-                numUniquePeds = pedID_list.shape[0]
+                # pedID_list = np.unique(seq_frame_data[:, :, 0])
+                # numUniquePeds = pedID_list.shape[0]
 
-                sourceData = np.zeros((self.seq_length, self.maxNumPeds, 3))
-                targetData = np.zeros((self.seq_length, self.maxNumPeds, 3))
+                # sourceData = np.zeros((self.seq_length, self.max_num_peds, 3))
+                # targetData = np.zeros((self.seq_length, self.max_num_peds, 3))
 
-                for seq in range(self.seq_length):
-                    sseq_frame_data = seq_source_frame_data[seq, :]
-                    tseq_frame_data = seq_target_frame_data[seq, :]
-                    for ped in range(numUniquePeds):
-                        pedID = pedID_list[ped]
+                # for seq in range(self.seq_length):
+                #     sseq_frame_data = seq_source_frame_data[seq, :]
+                #     tseq_frame_data = seq_target_frame_data[seq, :]
+                #     for ped in range(numUniquePeds):
+                #         pedID = pedID_list[ped]
 
-                        if pedID == 0:
-                            continue
-                        else:
-                            sped = sseq_frame_data[sseq_frame_data[:, 0] == pedID, :]
-                            tped = np.squeeze(tseq_frame_data[tseq_frame_data[:, 0] == pedID, :])
-                            if sped.size != 0:
-                                sourceData[seq, ped, :] = sped
-                            if tped.size != 0:
-                                targetData[seq, ped, :] = tped
+                #         if pedID == 0:
+                #             continue
+                #         else:
+                #             sped = sseq_frame_data[sseq_frame_data[:, 0] == pedID, :]
+                #             tped = np.squeeze(tseq_frame_data[tseq_frame_data[:, 0] == pedID, :])
+                #             if sped.size != 0:
+                #                 sourceData[seq, ped, :] = sped
+                #             if tped.size != 0:
+                #                 targetData[seq, ped, :] = tped
 
-                x_batch.append(sourceData)
-                y_batch.append(targetData)
+                x_batch.append(seq_source_frame_data)
+                y_batch.append(seq_target_frame_data)
+                num_peds_batch.append(seq_num_peds_list)
+                peds_batch.append(seq_peds_list)
+
                 self.frame_pointer += self.seq_length
                 d.append(self.dataset_pointer)
                 i += 1
@@ -211,7 +254,7 @@ class DataLoader():
                 # Increment the dataset pointer and set the frame_pointer to zero
                 self.tick_batch_pointer()
 
-        return x_batch, y_batch, d
+        return x_batch, y_batch, d, num_peds_batch, peds_batch
 
     def tick_batch_pointer(self):
         '''
@@ -232,6 +275,58 @@ class DataLoader():
         # Go to the first frame of the first dataset
         self.dataset_pointer = 0
         self.frame_pointer = 0
+
+    def convert_proper_array(self, x_seq, num_ped_list, ped_list):
+        #converter function to appropriate format. Instead of direcly use ped ids, we are mapping ped ids to
+        #array indices using a lookup table for each sequence -> speed
+        #output: seq_lenght (real sequence lenght+1)*max_ped_id+1 (biggest id number in the sequence)*2 (x,y)
+        # print()
+        # print("x seq shape:{}".format(x_seq.shape))
+        # print("ped list shape:{}".format(ped_list))
+
+        #get unique ids from sequence
+        # unique_ids = np.unique(ped_list)
+        unique_ids = np.unique(np.concatenate(ped_list).ravel().tolist()).astype(int)
+
+        # unique_ids = [np.array(unique_id) for unique_id in unique_ids]
+
+        # print(unique_ids)
+
+        # print("===================")
+        # print(zip(unique_ids, range(0, len(unique_ids))))
+
+        # print(unique_ids.tolist())
+        # print(list(range(0, len(unique_ids))))
+
+        # create a lookup table which maps ped ids -> array indices
+        lookup_table = dict(zip(unique_ids.tolist(), list(range(0, len(unique_ids)))))
+
+        seq_data = np.zeros(shape=(self.seq_length, len(lookup_table), 2))
+
+        # print("&&&&&&&&&&&&&&&&&&")
+        # print(ped_list)
+
+        # create new structure of array
+        for ind, frame in enumerate(x_seq):
+            corr_index = []
+            ped_ids = frame[:, 0]
+
+            for ped_id_index in range(len(ped_ids)):
+                ped_id = ped_ids[ped_id_index].astype(int)
+                
+                if ped_id == 0:
+                    continue
+
+                corr_index.append(lookup_table[ped_id])
+
+            seq_data[ind, corr_index, :] = frame[corr_index, 1 : 3]
+
+        # return_arr = Variable(torch.from_numpy(np.array(seq_data)).float())
+
+        print("xxxxxxxxxxxxxxxxxxxxxx")
+        print(seq_data)
+
+        return seq_data, lookup_table
 
     # def preprocess(self, data_dirs, data_file):
     #     '''

@@ -1,92 +1,78 @@
 import tensorflow as tf
 
-# class EmbeddingLayer(tf.keras.layers.Layer):
-#     def __init__(self, args):
-#         super(EmbeddingLayer, self).__init__()
-#         self.in_dim = 2
-#         self.out_dim = args.embedding_size
-
-#         self.weight = self.add_weight(shape=(self.in_dim, self.out_dim),
-#                                      initializer='glorot_uniform',
-#                                      name='embedding_weight')
-
-#         self.bias = self.add_weight(shape=(self.out_dim,),
-#                                      initializer='zeros',
-#                                      name='embedding_weight')
-
-#         self.activation = tf.keras.activations.relu
-
-#     def call(self, x):
-#         x = tf.matmul(x, self.weight)
-#         x = tf.add(x, self.bias)
-
-#         output = self.activation(x)
-
-#         return output
-
-# https://stackoverflow.com/questions/60624960/tf-keras-layers-rnn-vs-tf-keras-layers-stackedrnncells-tensorflow-2
-
-class Model(tf.keras.Model):
+class SocialModel(tf.keras.Model):
 
     def __init__(self, args):
-        super(Model, self).__init__()
+        super(SocialModel, self).__init__()
         self.args = args
 
-        # dim = tf.zeros([args.batch_size, args.rnn_size])
-        # rnn_cells = [tf.keras.layers.LSTMCell(args.rnn_size) for _ in range(args.num_layers)]
+        self.cell = tf.keras.layers.LSTMCell(args.rnn_size)
 
-        # for rnn_cell in rnn_cells:
-        #     print("+++++++++++++{}".format(rnn_cell.state_size))
+        self.spatial_embedding = tf.keras.layers.Dense(args.embedding_size, activation = tf.keras.activations.relu) 
+        self.tensor_embedding = tf.keras.layers.Dense(args.embedding_size, activation = tf.keras.activations.relu)
 
-        # # stacked_lstm = tf.keras.layers.StackedRNNCells(rnn_cells)
-        # # initial_state = stacked_lstm.get_initial_state(batch_size=args.batch_size, dtype=tf.float32)
-        # self.lstm_layer = tf.keras.layers.RNN(rnn_cells, return_sequences=True, return_state=True)
-        # Output size is the set of parameters (mu, sigma, corr)
-        self.output_size = 5  # 2 mu, 2 sigma and 1 corr
+        self.output_size = 5 
+        self.output_layer = tf.keras.layers.Dense(self.output_size)
 
-        self.embedding_layer = tf.keras.layers.Dense(args.embedding_size, activation = tf.keras.activations.relu) # EmbeddingLayer(args)
+    def get_social_tensor(self, grid, hidden_states):
+        # Number of peds
+        numNodes = grid.size()[0]
 
-        self.lstm_layer = tf.keras.layers.LSTM(args.rnn_size, return_sequences=True)
+        # Construct the variable
+        social_tensor = Variable(torch.zeros(numNodes, self.grid_size*self.grid_size, self.rnn_size))
+        if self.use_cuda:
+            social_tensor = social_tensor.cuda()
+        
+        # For each ped
+        for node in range(numNodes):
+            # Compute the social tensor
+            social_tensor[node] = torch.mm(torch.t(grid[node]), hidden_states)
 
-        self.dense = tf.keras.layers.Dense(self.output_size * 2)
+        # Reshape the social tensor
+        social_tensor = social_tensor.view(numNodes, self.grid_size*self.grid_size*self.rnn_size)
+        return social_tensor
 
-    def call(self, x):
-        # print("=========================x shape:{}".format(x.shape))
+    def call(self, frame_datas, ped_lists, grid_frame_datas, ped_indexs):
+        num_peds = len(ped_indexs)
+        outputs = tf.zeros(self.seq_length * num_peds, self.output_size)
 
-        # inputs = tf.split(x, self.args.seq_length, 1)
-        # inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+        # [args.seq_length, args.max_num_peds, 3]
+        for frame_num, frame in enumerate(frame_data):
+            # grid_frame_data = grid_frame_datas[frame_num]
 
-        x = self.embedding_layer(x)
+            node_ids = [int(node_id) for node_id in ped_lists[frame_num]]
 
-        # print("=========================x11 shape:{}".format(x.shape))
+            if len(node_ids) == 0:
+                continue
 
-        outputs = self.lstm_layer(x)
+            list_of_nodes = [ped_indexs[x] for x in node_ids]
 
-        # print("===================outputs shape:{}".format(outputs.shape))
+            nodes_current = frame[list_of_nodes,:]
+            # Get the corresponding grid masks
+            grid_current = grids[framenum]
 
-        output = self.dense(outputs)
+            hidden_states_current = torch.index_select(hidden_states, 0, corr_index)
 
-        # print("=====================output shape:{}".format(output.shape))
+            social_tensor = self.get_social_tensor(grid_current, hidden_states_current)
 
-        return output
-        # inputs = tf.split(x, self.args.seq_length, 1)
-        # inputs = [tf.squeeze(input_, [1]) for input_ in inputs]
+            # Embed inputs
+            input_embedded = self.spatial_embedding(nodes_current)
+            tensor_embedded = self.tensor_embedding(social_tensor)
 
-        # embedded_inputs = []
-        # for input in inputs:
-        #     # Each x is a 2D tensor of size numPoints x 2
-        #     # Embedding layer
-        #     embedded_x = self.embedding_layer(input)
+            # Concat input
+            concat_embedded = tf.concat([input_embedded, tensor_embedded], axis = 1)
 
-        #     print("===================embedded shape:{}".format(embedded_x.shape))
+            h_nodes = self.cell(concat_embedded, (hidden_states_current))
 
-        #     embedded_inputs.append(embedded_x)
+            # Compute the output
+            outputs[framenum*numNodes + corr_index.data] = self.output_layer(h_nodes)
 
-        # whole_seq_output, final_memory_state, final_carry_state = self.lstm_layer(embedded_inputs)
+            # Update hidden and cell states
+            hidden_states[corr_index.data] = h_nodes
 
-        # outputs, last_state = self.lstm_layer(embedded_inputs)
+            cell_states[corr_index.data] = c_nodes
 
-        # output = tf.reshape(tf.concat(1, outputs), [-1, args.rnn_size])
-
-        # output = self.dense(output)
+        for frame_num in range(self.seq_length):
+            for node in range(num_nodes):
+                outputs_return[frame_num, node, :] = outputs[frame_num * num_nodes + node, :]
 

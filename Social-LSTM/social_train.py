@@ -5,9 +5,9 @@ import os
 import time
 import pickle
 
-from model import Model
-from dataset import DataLoader
-from grid import getSequenceGridMask
+from social_model import SocialModel
+from social_dataset import SocialDataLoader
+from grid import get_sequence_grid_mask
 
 def main():
     parser = argparse.ArgumentParser()
@@ -58,7 +58,7 @@ def main():
     parser.add_argument('--grid_size', type=int, default=2,
                         help='Grid size of the social grid')
     # Maximum number of pedestrians to be considered
-    parser.add_argument('--maxNumPeds', type=int, default=27,
+    parser.add_argument('--max_num_peds', type=int, default=27,
                         help='Maximum Number of Pedestrians')
     # The leave out dataset
     parser.add_argument('--leaveDataset', type=int, default=1,
@@ -227,21 +227,12 @@ def sample(self, sess, traj, num = 10):
 
 def train(args):
     datasets = list(range(2))
-    # Remove the leaveDataset from datasets
-    #datasets.remove(args.leaveDataset)
 
-    # Create the data loader object. This object would preprocess the data in terms of
-    # batches each of size args.batch_size, of length args.seq_length
-    data_loader = DataLoader(args.batch_size, args.seq_length, args.maxNumPeds, datasets, forcePreProcess=True)
+    data_loader = SocialDataLoader(args.batch_size, args.seq_length, args.max_num_peds, datasets, forcePreProcess = True)
 
-    # Save the arguments int the config file
-    # with open(os.path.join('save', 'config.pkl'), 'wb') as f:
-    #     pickle.dump(args, f)
+    model = SocialModel(args)
 
-    # Create a Vanilla LSTM model with the arguments
-    model = Model(args)
-
-    optimizer = tf.keras.optimizers.RMSprop(args.learning_rate, decay=5e-4)
+    optimizer = tf.keras.optimizers.RMSprop(args.learning_rate, decay = 5e-4)
 
     for e in range(args.num_epochs):
 
@@ -249,28 +240,35 @@ def train(args):
 
         for batch in range(data_loader.num_batches):
             start = time.time()
-            # Get the source and target data of the current batch
-            # x has the source data, y has the target data
-            # x, y = data_loader.next_batch()
 
-            x, y, d = data_loader.next_batch()
+            x, y, d, num_peds, ped_ids = data_loader.next_batch()
 
             for batch in range(data_loader.batch_size):
 
-                x_batch, y_batch, d_batch = x[batch], y[batch], d[batch]
+                x_batch, y_batch, d_batch, num_ped_batch, ped_id_batch = x[batch], y[batch], d[batch], num_peds[batch], ped_ids[batch]
 
                 if d_batch == 0 and datasets[0] == 0:
                     dataset_data = [640, 480]
                 else:
                     dataset_data = [720, 576]
 
-                grid_batch = getSequenceGridMask(x_batch, dataset_data, args.neighborhood_size, args.grid_size)
+                print(ped_id_batch)
+
+                print(num_ped_batch)
+
+                grid_batch = get_sequence_grid_mask(x_batch, dataset_data, args.neighborhood_size, args.grid_size)
+
+                # print("grid batch size:{}".format(grid_batch.shape))
+                # print(np.where(grid_batch > 0))
+
+                # ped_ids_index = dict(zip(ped_id_batch, range(0, len(ped_id_batch))))
+                x_batch, ped_ids_index = data_loader.convert_proper_array(x_batch, num_ped_batch, ped_id_batch)
 
                 train_loss = 0.0
                 with tf.GradientTape() as tape:
-                    tensor_x = tf.convert_to_tensor(x, dtype=tf.float32)
+                    tensor_x = tf.convert_to_tensor(x_batch, dtype=tf.float32)
 
-                    logits = model(tensor_x)
+                    logits = model(tensor_x, ped_id_batch, ped_ids_index)
 
                     [o_mux, o_muy, o_sx, o_sy, o_corr] = get_coef(logits)
 
