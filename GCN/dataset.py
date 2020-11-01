@@ -37,6 +37,11 @@ class CoraData():
         idx_map = {j: i for i, j in enumerate(idx)}
         edge_indexs = np.array(list(map(idx_map.get, edges.flatten())), dtype=np.int32)
         edge_indexs = edge_indexs.reshape(edges.shape)
+
+        edge_index_len = len(edge_indexs)
+        for i in range(edge_index_len):
+            edge_indexs = np.concatenate((edge_indexs, [[edge_indexs[i][1], edge_indexs[i][0]]]))
+
         adjacency = sp.coo_matrix((np.ones(len(edge_indexs)),
                     (edge_indexs[:, 0], edge_indexs[:, 1])),
                     shape=(features.shape[0], features.shape[0]), dtype="float32")
